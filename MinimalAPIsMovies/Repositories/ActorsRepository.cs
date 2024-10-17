@@ -19,7 +19,7 @@ namespace MinimalAPIsMovies.Repositories
             using (var connection = new SqlConnection(connectionString))
             {
 
-                var id = await connection.QuerySingleAsync<int>("Actors_Create", new { Actors.Name,Actors.DateOfBirth,Actors.Picture });
+                var id = await connection.QuerySingleAsync<int>("Actors_Create", new { Actors.Name,Actors.DateOfBirth,Actors.Picture }, commandType: System.Data.CommandType.StoredProcedure);
                 Actors.Id = id;
                 return id;
             }
