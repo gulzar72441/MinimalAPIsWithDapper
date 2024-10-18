@@ -3,64 +3,118 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.OutputCaching;
 using MinimalAPIsMovies.DTOs;
 using MinimalAPIsMovies.Entities;
+using MinimalAPIsMovies.Filters;
 using MinimalAPIsMovies.Repositories;
 
 namespace MinimalAPIsMovies.EndPoints
 {
-    public static class GenresEndPoints
+    public static class GenresEndpoints
     {
         public static RouteGroupBuilder MapGenres(this RouteGroupBuilder group)
         {
-            group.MapGet("/", GetGenres).CacheOutput(c => c.Expire(TimeSpan.FromSeconds(15)).Tag("genre-get"));
+            group.MapGet("/", GetGenres)
+                .CacheOutput(c => c.Expire(TimeSpan.FromSeconds(60)).Tag("genres-get"));
             group.MapGet("/{id:int}", GetById);
-            group.MapPost("/", Create);
-            group.MapPut("/{id:int}", Update);
-            group.MapDelete("/{id:int}", Delete);
+            group.MapPost("/", Create)
+                 .AddEndpointFilter<ValidationFilter<CreateGenreDTO>>()
+                 .RequireAuthorization("isadmin")
+                 .WithOpenApi();
+            group.MapPut("/{id:int}", Update)
+                .AddEndpointFilter<ValidationFilter<CreateGenreDTO>>()
+                .RequireAuthorization("isadmin")
+                 .WithOpenApi(options =>
+                 {
+                     options.Summary = "Update a genre";
+                     options.Description = "With this endpoint we can update a genre";
+                     options.Parameters[0].Description = "The id of the genre to update";
+                     options.RequestBody.Description = "The genre to update";
+                     return options;
+                 });
+            group.MapDelete("/{id:int}", Delete).RequireAuthorization("isadmin");
             return group;
         }
-        #region Mehtods
-        static async Task<Ok<List<GenreDTO>>> GetGenres(IGenresRepository genresRepository,IMapper mapper)
+
+        static async Task<Ok<List<GenreDTO>>> GetGenres(IGenresRepository repository,
+            IMapper mapper, ILoggerFactory loggerFactory)
         {
-            var genres = await genresRepository.GetAll();
-            var genreDTO = mapper.Map<List<GenreDTO>>(genres);
-            return TypedResults.Ok(genreDTO);
+            var type = typeof(GenresEndpoints);
+            var logger = loggerFactory.CreateLogger(type.FullName!);
+
+
+            logger.LogTrace("This is a trace message");
+            logger.LogDebug("This is a debug message");
+            logger.LogInformation("This is a information message");
+            logger.LogWarning("This is a warning message");
+            logger.LogError("This is a error message");
+            logger.LogCritical("This is a critical message");
+
+            //logger.LogInformation("Getting the list of genres");
+
+            var genres = await repository.GetAll();
+            var genresDTO = mapper.Map<List<GenreDTO>>(genres);
+            return TypedResults.Ok(genresDTO);
         }
-        static async Task<Results<Ok<GenreDTO>, NotFound>> GetById(int id, IGenresRepository genresRepository, IMapper mapper)
+
+        static async Task<Results<Ok<GenreDTO>, NotFound>> GetById(
+            [AsParameters] GetGenreByIdRequestDTO model)
         {
-            var genre = await genresRepository.GetById(id);
+            var genre = await model.Repository.GetById(model.Id);
+
             if (genre is null)
+            {
                 return TypedResults.NotFound();
-            var genreDTO = mapper.Map<GenreDTO>(genre);
+            }
+
+            var genreDTO = model.Mapper.Map<GenreDTO>(genre);
+
             return TypedResults.Ok(genreDTO);
         }
-        static async Task<Created<Genres>> Create(CreateGenreDTO createGenreDTO, IGenresRepository genresRepository, IOutputCacheStore outputCacheStore, IMapper mapper)
+
+        static async Task<Results<Created<GenreDTO>, ValidationProblem>>
+            Create(CreateGenreDTO createGenreDTO,
+           [AsParameters] CreateGenreRequestDTO model)
         {
-            var genres = mapper.Map<Genres>(createGenreDTO);
-            await genresRepository.Create(genres);
-            await outputCacheStore.EvictByTagAsync("genre-get", default);
-            return TypedResults.Created($"/genres/{genres.Id}", genres);
+            var genre = model.Mapper.Map<Genres>(createGenreDTO);
+            var id = await model.GenresRepository.Create(genre);
+            await model.OutputCacheStore.EvictByTagAsync("genres-get", default);
+            var genreDTO = model.Mapper.Map<GenreDTO>(genre);
+            return TypedResults.Created($"/genres/{id}", genreDTO);
         }
-        static async Task<Results<NotFound, NoContent>> Update(int id, CreateGenreDTO createGenreDTO, IGenresRepository genresRepository, IOutputCacheStore outputCacheStore, IMapper mapper)
+
+        static async Task<Results<NotFound, NoContent>> Update(int id,
+            CreateGenreDTO createGenreDTO,
+            IGenresRepository repository,
+            IOutputCacheStore outputCacheStore, IMapper mapper)
         {
-            var exists = await genresRepository.GetById(id);
-            if (exists is null)
+            var exists = await repository.Exists(id);
+
+            if (!exists)
+            {
                 return TypedResults.NotFound();
-            var genres = mapper.Map<Genres>(createGenreDTO);
-            genres.Id = id;
-            await genresRepository.Update(genres);
-            await outputCacheStore.EvictByTagAsync("genre-get", default);
+            }
+
+            var genre = mapper.Map<Genres>(createGenreDTO);
+            genre.Id = id;
+
+            await repository.Update(genre);
+            await outputCacheStore.EvictByTagAsync("genres-get", default);
             return TypedResults.NoContent();
         }
-        static async Task<Results<NotFound, NoContent>> Delete(int id, IGenresRepository genresRepository, IOutputCacheStore outputCacheStore)
+
+        static async Task<Results<NotFound, NoContent>> Delete(int id, IGenresRepository repository,
+            IOutputCacheStore outputCacheStore)
         {
-            var exists = await genresRepository.GetById(id);
-            if (exists is null)
+            var exists = await repository.Exists(id);
+
+            if (!exists)
+            {
                 return TypedResults.NotFound();
-            await genresRepository.Delete(id);
-            await outputCacheStore.EvictByTagAsync("genre-get", default);
+            }
+
+            await repository.Delete(id);
+            await outputCacheStore.EvictByTagAsync("genres-get", default);
             return TypedResults.NoContent();
         }
-        #endregion
     }
 
 }

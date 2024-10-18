@@ -4,11 +4,13 @@ namespace MinimalAPIsMovies.Repositories
 {
     public interface IGenresRepository
     {
-        Task<int> Create(Genres genres);
+        Task<int> Create(Genres genre);
         Task<List<Genres>> GetAll();
-        Task<Genres?> GetById(int Id);
-        Task<bool> Exists(int Id);
-        Task Update(Genres genres);
-        Task Delete(int Id);
+        Task<Genres?> GetById(int id);
+        Task<bool> Exists(int id);
+        Task Update(Genres genre);
+        Task Delete(int id);
+        Task<List<int>> Exists(List<int> ids);
+        Task<bool> Exists(int id, string name);
     }
 }
